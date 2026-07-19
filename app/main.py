@@ -1,19 +1,9 @@
 from fastapi import FastAPI
-from pydantic import BaseModel
 
-app = FastAPI()  # Создание приложения
+from app.api.payments import router
 
-# Модель для заметки (валидация данных)
-class Note(BaseModel):
-    title: str
-    content: str
+app = FastAPI()
 
-# Маршрут для главной страницы
-@app.get("/")
-def read_root():
-    return {"message": "Welcome to Notes API!"}
+app.include_router(router=router)
 
-# Маршрут для создания заметки
-@app.post("/notes")
-def create_note(note: Note):
-    return {"note": note.dict(), "status": "created"}
+

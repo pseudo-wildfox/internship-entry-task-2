@@ -1,0 +1,39 @@
+services:
+  candidate-service:
+    build: .
+    environment:
+      PROVIDER_URL: http://provider-simulator:8081
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/payments_db
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_started
+    volumes:
+      - candidate-data:/data
+
+  provider-simulator:
+    image: ghcr.io/fintech-dev-lab/internship-provider-simulator:v0.2.0
+    environment:
+      CALLBACK_URL: http://candidate-service:8080/receipts
+    ports:
+      - "8081:8081"
+    depends_on:
+      - candidate-service
+
+
+  db:
+    image: postgres:17
+    container_name: postgres17_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: payments_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+volumes:
+  candidate-data:
+  pgdata:
