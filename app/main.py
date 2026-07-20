@@ -7,7 +7,6 @@ from app.db.database import check_connection, create_schema
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await check_connection()
-    await create_schema()
 
     yield
 
