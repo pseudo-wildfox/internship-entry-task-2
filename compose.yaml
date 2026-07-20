@@ -3,7 +3,7 @@ services:
     build: .
     environment:
       PROVIDER_URL: http://provider-simulator:8081
-      DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/payments_db
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/payments_db
     ports:
       - "8080:8080"
     depends_on:
