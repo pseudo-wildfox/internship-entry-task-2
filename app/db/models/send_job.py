@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, func
+from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, func, Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.database import Base
@@ -9,7 +9,9 @@ from app.db.models.enums import SendJobState
 
 class SendJob(Base):
     __tablename__ = "send_jobs"
-
+    __table_args__ = (
+        Index("ix_send_jobs_state", "state"),
+    )
     operation_id: Mapped[str] = mapped_column(
         ForeignKey("operations.operation_id"),
         primary_key=True,

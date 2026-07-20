@@ -39,7 +39,7 @@ class Operation(Base):
     )
 
     provider_payment_id: Mapped[str | None] = mapped_column(
-        String(64),
+        String(128),
         unique=True,
     )
 
