@@ -1,8 +1,20 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
-
 from app.api.payments import router
+from app.db.database import check_connection, create_schema
 
-app = FastAPI()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await check_connection()
+    await create_schema()
+
+    yield
+
+
+app = FastAPI(
+    lifespan=lifespan,
+)
 
 app.include_router(router=router)
 
