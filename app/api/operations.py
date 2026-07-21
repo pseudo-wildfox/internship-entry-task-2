@@ -5,6 +5,7 @@ from app.db.database import get_db
 from app.schemas.operation import (
     CreateOperationRequest,
     OperationResponse,
+    EventResponse,
 )
 from app.services.operation_service import (
     OperationAlreadyExistsError,
@@ -44,6 +45,41 @@ async def create_operation(
         ) from exc
 
     return OperationResponse.model_validate(operation)
+
+
+@router.get(
+    "/{operation_id}/events",
+    response_model=list[EventResponse],
+    status_code=status.HTTP_200_OK,
+)
+async def get_operation_events(
+    operation_id: str,
+    session: AsyncSession = Depends(get_db),
+) -> list[EventResponse]:
+    try:
+        events = await operation_service.get_events(
+            session=session,
+            operation_id=operation_id,
+        )
+
+    except OperationNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+
+    return [
+        EventResponse.model_validate(event)
+        for event in events
+    ]
+
+
+@router.post("/{operation_id}/submit")
+async def submit_operation(
+        operation_id: str,
+        session: AsyncSession = Depends(get_db)
+):
+    pass
 
 
 @router.get(
