@@ -1,6 +1,13 @@
+from datetime import datetime
+
 from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+)
 
 from app.db.models.enums import OperationStatus
 
@@ -74,3 +81,21 @@ class OperationResponse(BaseModel):
     description: str | None
     status: OperationStatus
     provider_payment_id: str | None
+
+
+class EventResponse(BaseModel):
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+        from_attributes=True,
+    )
+
+    event_id: int = Field(
+        validation_alias="sequence_no",
+    )
+
+    type: str
+    from_status: OperationStatus | None
+    to_status: OperationStatus
+    message: str
+    occurred_at: datetime
