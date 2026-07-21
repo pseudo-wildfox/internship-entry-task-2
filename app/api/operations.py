@@ -8,6 +8,7 @@ from app.schemas.operation import (
 )
 from app.services.operation_service import (
     OperationAlreadyExistsError,
+    OperationNotFoundError,
     OperationService,
 )
 
@@ -39,6 +40,30 @@ async def create_operation(
     except OperationAlreadyExistsError as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
+
+    return OperationResponse.model_validate(operation)
+
+
+@router.get(
+    "/{operation_id}",
+    response_model=OperationResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def get_operation(
+    operation_id: str,
+    session: AsyncSession = Depends(get_db),
+) -> OperationResponse:
+    try:
+        operation = await operation_service.get_by_id(
+            session=session,
+            operation_id=operation_id,
+        )
+
+    except OperationNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
             detail=str(exc),
         ) from exc
 
