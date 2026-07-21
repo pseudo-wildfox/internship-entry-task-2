@@ -25,11 +25,6 @@ class Base(DeclarativeBase):
     pass
 
 
-async def create_schema() -> None:
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-
-
 async def check_connection() -> None:
     async with engine.connect() as conn:
         await conn.execute(text("SELECT 1"))

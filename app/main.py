@@ -1,7 +1,7 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from app.api.payments import router
-from app.db.database import check_connection, create_schema
+from app.db.database import check_connection
 
 
 @asynccontextmanager
