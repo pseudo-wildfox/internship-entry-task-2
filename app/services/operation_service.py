@@ -1,3 +1,4 @@
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -67,6 +68,7 @@ class OperationService:
 
         return operation
 
+
     async def get_by_id(
             self,
             session: AsyncSession,
@@ -81,3 +83,29 @@ class OperationService:
             raise OperationNotFoundError(operation_id)
 
         return operation
+
+
+    async def get_events(
+        self,
+        session: AsyncSession,
+        operation_id: str,
+    ) -> list[Event]:
+        operation = await session.get(
+            Operation,
+            operation_id,
+        )
+
+        if operation is None:
+            raise OperationNotFoundError(operation_id)
+
+        result = await session.execute(
+            select(Event)
+            .where(
+                Event.operation_id == operation_id,
+            )
+            .order_by(
+                Event.sequence_no.asc(),
+            )
+        )
+
+        return list(result.scalars().all())
