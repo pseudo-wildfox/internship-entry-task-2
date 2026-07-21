@@ -16,6 +16,16 @@ class OperationAlreadyExistsError(Exception):
             f"Operation '{operation_id}' already exists"
         )
 
+class OperationNotFoundError(Exception):
+    """Raised when an operation with the given ID does not exist."""
+
+    def __init__(self, operation_id: str) -> None:
+        self.operation_id = operation_id
+
+        super().__init__(
+            f"Operation '{operation_id}' not found"
+        )
+
 
 class OperationService:
     async def create(
@@ -54,5 +64,20 @@ class OperationService:
             ) from exc
 
         await session.refresh(operation)
+
+        return operation
+
+    async def get_by_id(
+            self,
+            session: AsyncSession,
+            operation_id: str,
+    ) -> Operation:
+        operation = await session.get(
+            Operation,
+            operation_id,
+        )
+
+        if operation is None:
+            raise OperationNotFoundError(operation_id)
 
         return operation
