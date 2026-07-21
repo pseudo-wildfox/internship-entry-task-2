@@ -1,19 +1,20 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
-from pydantic import BaseModel
+from app.api.payments import router
+from app.db.database import check_connection
 
-app = FastAPI()  # Создание приложения
 
-# Модель для заметки (валидация данных)
-class Note(BaseModel):
-    title: str
-    content: str
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await check_connection()
 
-# Маршрут для главной страницы
-@app.get("/")
-def read_root():
-    return {"message": "Welcome to Notes API!"}
+    yield
 
-# Маршрут для создания заметки
-@app.post("/notes")
-def create_note(note: Note):
-    return {"note": note.dict(), "status": "created"}
+
+app = FastAPI(
+    lifespan=lifespan,
+)
+
+app.include_router(router=router)
+
+
