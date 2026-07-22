@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -45,10 +46,12 @@ class OperationService:
 
         event = Event(
             operation=operation,
+            sequence_no=1,
             type="CREATED",
             from_status=None,
             to_status=OperationStatus.CREATED,
             message="Operation created",
+            occurred_at=datetime.now(timezone.utc),
         )
 
         session.add(operation)
@@ -70,9 +73,9 @@ class OperationService:
 
 
     async def get_by_id(
-            self,
-            session: AsyncSession,
-            operation_id: str,
+        self,
+        session: AsyncSession,
+        operation_id: str,
     ) -> Operation:
         operation = await session.get(
             Operation,
@@ -83,7 +86,6 @@ class OperationService:
             raise OperationNotFoundError(operation_id)
 
         return operation
-
 
     async def get_events(
         self,
