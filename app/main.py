@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
-from app.api.payments import router
+from app.api.health import health
+from app.api.operations import router
 from app.db.database import check_connection
 
 
@@ -15,6 +16,6 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+app.include_router(router=health)
 app.include_router(router=router)
-
 
