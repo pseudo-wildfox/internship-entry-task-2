@@ -35,6 +35,9 @@ class OperationService:
         session: AsyncSession,
         request: CreateOperationRequest,
     ) -> Operation:
+
+        await self.exists_of_throw_exception(session, request)
+
         operation = Operation(
             operation_id=request.operation_id,
             amount=request.amount,
@@ -70,6 +73,17 @@ class OperationService:
         await session.refresh(operation)
 
         return operation
+
+
+    async def exists_of_throw_exception(self, session, request):
+        existing = await session.get(
+            Operation,
+            request.operation_id,
+        )
+        if existing is not None:
+            raise OperationAlreadyExistsError(
+                request.operation_id
+            )
 
 
     async def get_by_id(
