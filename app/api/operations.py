@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.responses import JSONResponse
 
 from app.db.database import get_db
 from app.schemas.operation import (
@@ -10,7 +11,7 @@ from app.schemas.operation import (
 from app.services.operation_service import (
     OperationAlreadyExistsError,
     OperationNotFoundError,
-    OperationService,
+    OperationService, SubmitOutcome,
 )
 
 
@@ -74,12 +75,41 @@ async def get_operation_events(
     ]
 
 
-@router.post("/{operation_id}/submit")
+@router.post(
+    "/{operation_id}/submit",
+    response_model=OperationResponse,
+)
 async def submit_operation(
-        operation_id: str,
-        session: AsyncSession = Depends(get_db)
-):
-    pass
+    operation_id: str,
+    session: AsyncSession = Depends(get_db),
+) -> JSONResponse:
+    try:
+        result = await operation_service.submit(
+            session=session,
+            operation_id=operation_id,
+        )
+
+    except OperationNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+
+    response_status = (
+        status.HTTP_202_ACCEPTED
+        if result.outcome == SubmitOutcome.CREATED
+        else status.HTTP_200_OK
+    )
+
+    return JSONResponse(
+        status_code=response_status,
+        content=OperationResponse.model_validate(
+            result.operation,
+        ).model_dump(
+            by_alias=True,
+            mode="json",
+        ),
+    )
 
 
 @router.get(
