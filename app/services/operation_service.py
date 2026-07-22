@@ -1,11 +1,26 @@
+from dataclasses import dataclass
 from datetime import datetime, timezone
+from enum import StrEnum
+
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import Operation, Event
-from app.db.models.enums import OperationStatus
+from app.db.models import Operation, Event, SendJob
+from app.db.models.enums import OperationStatus, SendJobState, EventType
 from app.schemas.operation import CreateOperationRequest
+
+
+
+class SubmitOutcome(StrEnum):
+    CREATED = "CREATED"
+    EXISTING = "EXISTING"
+
+
+@dataclass(frozen=True)
+class SubmitResult:
+    operation: Operation
+    outcome: SubmitOutcome
 
 
 class OperationAlreadyExistsError(Exception):
@@ -50,7 +65,7 @@ class OperationService:
         event = Event(
             operation=operation,
             sequence_no=1,
-            type="CREATED",
+            type=EventType.CREATED,
             from_status=None,
             to_status=OperationStatus.CREATED,
             message="Operation created",
@@ -125,3 +140,86 @@ class OperationService:
         )
 
         return list(result.scalars().all())
+
+
+    async def submit(
+            self,
+            session: AsyncSession,
+            operation_id: str,
+    ) -> SubmitResult:
+        result = await session.execute(
+            select(Operation)
+            .where(
+                Operation.operation_id == operation_id,
+            )
+            .with_for_update()
+        )
+        operation = result.scalar_one_or_none()
+
+        if operation is None:
+            raise OperationNotFoundError(operation_id)
+
+        if operation.status != OperationStatus.CREATED:
+            return SubmitResult(
+                operation=operation,
+                outcome=SubmitOutcome.EXISTING,
+            )
+
+        send_job = SendJob(
+            operation=operation,
+            state=SendJobState.PENDING,
+            attempt=0,
+            next_retry_at=None,
+            last_error=None,
+        )
+        session.add(send_job)
+
+        operation.status = OperationStatus.PROCESSING
+
+        event = Event(
+            operation=operation,
+            sequence_no=await self._get_next_sequence_no(
+                session=session,
+                operation_id=operation_id,
+            ),
+            type=EventType.SUBMIT_REQUESTED,
+            from_status=OperationStatus.CREATED,
+            to_status=OperationStatus.PROCESSING,
+            message="Payment submission requested",
+            occurred_at=datetime.now(timezone.utc),
+        )
+
+        session.add(event)
+
+        await session.commit()
+
+        await session.refresh(operation)
+
+        return SubmitResult(
+            operation=operation,
+            outcome=SubmitOutcome.CREATED,
+        )
+
+
+    async def _get_next_sequence_no(
+            self,
+            session: AsyncSession,
+            operation_id: str,
+    ) -> int:
+        result = await session.execute(
+            select(Event.sequence_no)
+            .where(
+                Event.operation_id == operation_id,
+            )
+            .order_by(
+                Event.sequence_no.desc(),
+            )
+            .limit(1)
+        )
+
+        last_sequence_no = result.scalar_one_or_none()
+
+        if last_sequence_no is None:
+            return 1
+
+        return last_sequence_no + 1
