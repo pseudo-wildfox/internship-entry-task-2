@@ -8,6 +8,15 @@ class OperationStatus(StrEnum):
     REJECTED = "REJECTED"
 
 
+'''
+    PENDING - Job еще ни разу не обрабатывался или готов к первой обработке.
+
+    RUNNING - Один worker сейчас пытается отправить платеж.
+
+    WAITING_RETRY - Последняя попытка не дала нам надежного результата. Нужно попробовать снова после next_retry_at.
+
+    DONE - HTTP-взаимодействие с провайдером завершено настолько, что повторять отправку больше не нужно.
+'''
 class SendJobState(StrEnum):
     PENDING = "PENDING"
     RUNNING = "RUNNING"
