@@ -1,4 +1,6 @@
 import uuid
+from unittest.mock import AsyncMock
+
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
@@ -11,7 +13,9 @@ from sqlalchemy.ext.asyncio import (
 
 from app.db.database import get_db
 from app.main import app
-from core.settings import settings
+from app.core.settings import settings
+from app.services.send_job_service import SendJobService
+from app.workers.running_worker import RunningWorker
 
 # ============================================================
 # Test database
@@ -121,5 +125,71 @@ async def operation_id(client) -> str:
     )
 
     assert response.status_code == 201
+
+    return operation_id
+
+
+@pytest_asyncio.fixture
+async def send_job_service():
+    return SendJobService()
+
+
+@pytest_asyncio.fixture
+async def provider_client():
+    return AsyncMock()
+
+
+@pytest_asyncio.fixture
+async def running_worker(
+    provider_client,
+    send_job_service,
+):
+    return RunningWorker(
+        session_factory=TestSessionLocal,
+        send_job_service=send_job_service,
+        provider_client=provider_client,
+        poll_interval=0.01,
+    )
+
+
+@pytest_asyncio.fixture
+async def running_operation(
+    client,
+    operation_id,
+    send_job_service,
+):
+    """
+    Creates an operation through the public API
+    and prepares its SendJob for RunningWorker.
+
+    State transition:
+
+        CREATED
+            │
+            │ POST /submit
+            ▼
+        Operation = PROCESSING
+        SendJob = PENDING
+            │
+            │ claim_send_job()
+            ▼
+        SendJob = RUNNING
+    """
+
+    response = await client.post(
+        f"/operations/{operation_id}/submit",
+    )
+
+    assert response.status_code == 202
+
+    async with TestSessionLocal() as session:
+        claimed = await send_job_service.claim_send_job(
+            session=session,
+            operation_id=operation_id,
+        )
+
+        assert claimed is True
+
+        await session.commit()
 
     return operation_id

@@ -1,16 +1,66 @@
+import asyncio
+import logging
 from contextlib import asynccontextmanager
+
+import httpx
 from fastapi import FastAPI
+
+from api.provider.provider_client import ProviderClient
+from core.settings import settings
+from workers.pending_worker import PendingWorker
 from app.api.health import health
 from app.api.operations import router
-from app.db.database import check_connection
+from app.db.database import check_connection, SessionLocal
+from app.core.logging_config import setup_logging
+from app.services.send_job_service import SendJobService
+from workers.running_worker import RunningWorker
+
+setup_logging()
+
+logger = logging.getLogger(__name__)
+
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await check_connection()
 
-    yield
+    pending_worker = PendingWorker(
+        session_factory=SessionLocal,
+        send_job_service=SendJobService(),
+    )
 
+    async with httpx.AsyncClient(
+        timeout=httpx.Timeout(5.0),
+    ) as http_client:
+        app.state.http_client = http_client
+
+        provider_client = ProviderClient(
+            client=http_client, provider_url=settings.PROVIDER_URL
+        )
+        running_worker = RunningWorker(
+            session_factory=SessionLocal,
+            send_job_service=SendJobService(),
+            provider_client=provider_client,
+        )
+
+        pending_task = asyncio.create_task(
+            pending_worker.run(),
+            name="pending-worker",
+        )
+        running_task = asyncio.create_task(
+            running_worker.run(),
+            name="running-worker",
+        )
+        try:
+            yield
+        finally:
+
+            pending_worker.stop()
+            await pending_task
+
+            running_worker.stop()
+            await running_task
 
 app = FastAPI(
     lifespan=lifespan,
