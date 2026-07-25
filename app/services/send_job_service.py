@@ -89,39 +89,23 @@ class SendJobService:
 
         return result.scalar_one_or_none()
 
+
     async def complete_job(
         self,
         session: AsyncSession,
         operation_id: str,
         provider_payment_id: str,
     ) -> None:
-        result = await session.execute(
-            select(SendJob)
-            .where(SendJob.operation_id == operation_id)
-            .with_for_update()
-        )
-        send_job = result.scalar_one_or_none()
 
-        if send_job is None:
-            raise ValueError(f"SendJob not found: {operation_id}")
-
-        operation = await session.get(
-            Operation,
+        operation = await self._get_operation_for_update(
+            session,
             operation_id,
         )
 
-        if operation is None:
-            raise ValueError(f"Operation not found: {operation_id}")
+        send_job = operation.send_job
 
-        # The Job has already been processed.
-        #
-        # For example, the callback could have arrived before the HTTP response
-        # from the provider and already changed the SendJob state.
-        #
-        # In this case, the late response from the provider should not rollback
-        # or reprocess the operation.
-        if send_job.state != SendJobState.RUNNING:
-            return
+        if send_job is None:
+            raise ValueError(f"SendJob not found: {operation_id}")
 
         # The callback could have set the provider_payment_id before
         # we received HTTP 202 from the provider.
@@ -138,6 +122,17 @@ class SendJobService:
                 f"existing={operation.provider_payment_id}, "
                 f"received={provider_payment_id}"
             )
+
+        # The Job has already been processed.
+        #
+        # For example, the callback could have arrived before the HTTP response
+        # from the provider and already changed the SendJob state.
+        #
+        # In this case, the late response from the provider should not rollback
+        # or reprocess the operation.
+
+        if send_job.state != SendJobState.RUNNING:
+            return
 
         # If the callback has already set the provider_payment_id,
         # there is no need to assign it again.
@@ -159,7 +154,15 @@ class SendJobService:
         operation_id: str,
         error: str,
     ) -> None:
-        send_job = await self._get_send_job_or_throw(operation_id, session)
+        operation = await self._get_operation_for_update(
+            session,
+            operation_id,
+        )
+
+        send_job = operation.send_job
+
+        if send_job is None:
+            raise ValueError(f"SendJob not found: {operation_id}")
 
         if send_job.state != SendJobState.RUNNING:
             return
