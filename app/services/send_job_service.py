@@ -18,30 +18,58 @@ class SendJobService:
         """
         Atomically claims a PENDING SendJob.
 
+        Operation is the serialization point for all state changes
+        related to an operation.
+
         PENDING -> RUNNING
 
         Returns True if this worker successfully claimed the job.
-        Returns False if the job does not exist or was already claimed.
+        Returns False if the operation or SendJob does not exist,
+        or the job was already claimed.
         """
 
-        stmt = (
-            update(SendJob)
-            .where(
-                SendJob.operation_id == operation_id,
-                SendJob.state == SendJobState.PENDING,
-            )
-            .values(
-                state=SendJobState.RUNNING,
-                updated_at=datetime.now(timezone.utc),
-            )
-            .returning(SendJob.operation_id)
+        operation = await self._get_operation_for_update(
+            session=session,
+            operation_id=operation_id,
         )
 
-        result = await session.execute(stmt)
+        send_job = operation.send_job
 
-        claimed_operation_id = result.scalar_one_or_none()
+        if send_job is None:
+            return False
 
-        return claimed_operation_id is not None
+        if send_job.state != SendJobState.PENDING:
+            return False
+
+        send_job.state = SendJobState.RUNNING
+        send_job.updated_at = datetime.now(timezone.utc)
+
+        return True
+
+
+    async def _get_operation_for_update(
+        self,
+        session: AsyncSession,
+        operation_id: str,
+    ) -> Operation:
+        """
+        Operation should be locked before accessing SendJob
+        """
+        result = await session.execute(
+            select(Operation)
+            .options(
+                selectinload(Operation.send_job),
+            )
+            .where(Operation.operation_id == operation_id)
+            .with_for_update()
+        )
+
+        operation = result.scalar_one_or_none()
+
+        if operation is None:
+            raise ValueError(f"Operation not found: {operation_id}")
+
+        return operation
 
 
     async def get_operation(
