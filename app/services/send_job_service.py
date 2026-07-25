@@ -67,7 +67,15 @@ class SendJobService:
         operation_id: str,
         provider_payment_id: str,
     ) -> None:
-        send_job = await self._get_send_job_or_throw(operation_id, session)
+        result = await session.execute(
+            select(SendJob)
+            .where(SendJob.operation_id == operation_id)
+            .with_for_update()
+        )
+        send_job = result.scalar_one_or_none()
+
+        if send_job is None:
+            raise ValueError(f"SendJob not found: {operation_id}")
 
         operation = await session.get(
             Operation,
