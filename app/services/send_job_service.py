@@ -170,13 +170,3 @@ class SendJobService:
         send_job.state = SendJobState.WAITING_RETRY
         send_job.attempt += 1
         send_job.last_error = error
-
-
-    async def _get_send_job_or_throw(self, operation_id, session):
-        send_job = await session.get(
-            SendJob,
-            operation_id,
-        )
-        if send_job is None:
-            raise ValueError(f"SendJob not found: {operation_id}")
-        return send_job
