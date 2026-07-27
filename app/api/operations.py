@@ -9,22 +9,19 @@ from app.schemas.operation import (
     EventResponse,
 )
 from app.services.operation_service import (
-    OperationAlreadyExistsError,
-    OperationNotFoundError,
     OperationService, SubmitOutcome,
 )
+from core.dependencies import get_operation_service
+from core.exceptions import OperationAlreadyExistsError, OperationNotFoundError
 
-
-router = APIRouter(
+operations_router = APIRouter(
     prefix="/operations",
     tags=["operations"],
 )
 
-# I don't mind global service because it's stateless
-operation_service = OperationService()
 
 
-@router.post(
+@operations_router.post(
     "",
     response_model=OperationResponse,
     status_code=status.HTTP_201_CREATED,
@@ -32,6 +29,7 @@ operation_service = OperationService()
 async def create_operation(
     request: CreateOperationRequest,
     session: AsyncSession = Depends(get_db),
+    operation_service: OperationService = Depends(get_operation_service),
 ) -> OperationResponse:
     try:
         operation = await operation_service.create(
@@ -48,7 +46,7 @@ async def create_operation(
     return OperationResponse.model_validate(operation)
 
 
-@router.get(
+@operations_router.get(
     "/{operation_id}/events",
     response_model=list[EventResponse],
     status_code=status.HTTP_200_OK,
@@ -56,6 +54,7 @@ async def create_operation(
 async def get_operation_events(
     operation_id: str,
     session: AsyncSession = Depends(get_db),
+    operation_service: OperationService = Depends(get_operation_service)
 ) -> list[EventResponse]:
     try:
         events = await operation_service.get_events(
@@ -75,13 +74,14 @@ async def get_operation_events(
     ]
 
 
-@router.post(
+@operations_router.post(
     "/{operation_id}/submit",
     response_model=OperationResponse,
 )
 async def submit_operation(
     operation_id: str,
     session: AsyncSession = Depends(get_db),
+    operation_service: OperationService = Depends(get_operation_service)
 ) -> JSONResponse:
     try:
         result = await operation_service.submit(
@@ -112,7 +112,7 @@ async def submit_operation(
     )
 
 
-@router.get(
+@operations_router.get(
     "/{operation_id}",
     response_model=OperationResponse,
     status_code=status.HTTP_200_OK,
@@ -120,6 +120,7 @@ async def submit_operation(
 async def get_operation(
     operation_id: str,
     session: AsyncSession = Depends(get_db),
+    operation_service: OperationService = Depends(get_operation_service)
 ) -> OperationResponse:
     try:
         operation = await operation_service.get_by_id(

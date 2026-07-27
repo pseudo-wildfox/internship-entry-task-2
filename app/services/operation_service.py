@@ -9,7 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.models import Operation, Event, SendJob
 from app.db.models.enums import OperationStatus, SendJobState, EventType
 from app.schemas.operation import CreateOperationRequest
-
+from core.exceptions import OperationAlreadyExistsError, OperationNotFoundError
+from services.event_service import EventService
 
 
 class SubmitOutcome(StrEnum):
@@ -23,28 +24,15 @@ class SubmitResult:
     outcome: SubmitOutcome
 
 
-class OperationAlreadyExistsError(Exception):
-    """Raised when an operation with the given ID already exists."""
-
-    def __init__(self, operation_id: str) -> None:
-        self.operation_id = operation_id
-
-        super().__init__(
-            f"Operation '{operation_id}' already exists"
-        )
-
-class OperationNotFoundError(Exception):
-    """Raised when an operation with the given ID does not exist."""
-
-    def __init__(self, operation_id: str) -> None:
-        self.operation_id = operation_id
-
-        super().__init__(
-            f"Operation '{operation_id}' not found"
-        )
-
-
 class OperationService:
+
+    def __init__(
+        self,
+        event_service: EventService,
+    ) -> None:
+        self._event_service = event_service
+
+
     async def create(
         self,
         session: AsyncSession,
@@ -62,18 +50,16 @@ class OperationService:
             provider_payment_id=None,
         )
 
-        event = Event(
+        session.add(operation)
+
+        await self._event_service.create_event(
+            session,
             operation=operation,
-            sequence_no=1,
-            type=EventType.CREATED,
+            event_type=EventType.CREATED,
             from_status=None,
             to_status=OperationStatus.CREATED,
             message="Operation created",
-            occurred_at=datetime.now(timezone.utc),
         )
-
-        session.add(operation)
-        session.add(event)
 
         try:
             await session.commit()
@@ -115,6 +101,7 @@ class OperationService:
             raise OperationNotFoundError(operation_id)
 
         return operation
+
 
     async def get_events(
         self,
@@ -176,20 +163,14 @@ class OperationService:
 
         operation.status = OperationStatus.PROCESSING
 
-        event = Event(
+        await self._event_service.create_event(
+            session,
             operation=operation,
-            sequence_no=await self._get_next_sequence_no(
-                session=session,
-                operation_id=operation_id,
-            ),
-            type=EventType.SUBMIT_REQUESTED,
+            event_type=EventType.SUBMIT_REQUESTED,
             from_status=OperationStatus.CREATED,
             to_status=OperationStatus.PROCESSING,
             message="Payment submission requested",
-            occurred_at=datetime.now(timezone.utc),
         )
-
-        session.add(event)
 
         await session.commit()
 
@@ -199,27 +180,3 @@ class OperationService:
             operation=operation,
             outcome=SubmitOutcome.CREATED,
         )
-
-
-    async def _get_next_sequence_no(
-            self,
-            session: AsyncSession,
-            operation_id: str,
-    ) -> int:
-        result = await session.execute(
-            select(Event.sequence_no)
-            .where(
-                Event.operation_id == operation_id,
-            )
-            .order_by(
-                Event.sequence_no.desc(),
-            )
-            .limit(1)
-        )
-
-        last_sequence_no = result.scalar_one_or_none()
-
-        if last_sequence_no is None:
-            return 1
-
-        return last_sequence_no + 1
