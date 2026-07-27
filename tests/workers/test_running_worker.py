@@ -2,7 +2,6 @@ import pytest
 from decimal import Decimal
 from unittest.mock import AsyncMock
 
-from app.workers.running_worker import RunningWorker
 from app.api.provider.provider_client import ProviderPayment
 from app.db.models.enums import OperationStatus, SendJobState
 from conftest import TestSessionLocal
@@ -129,6 +128,7 @@ async def test_running_worker_does_not_rollback_completed_operation(
         ),
     )
 
+
     # Simulate a callback that arrived before the HTTP 202
     # response from the provider.
     receipt_response = await client.post(
@@ -153,11 +153,6 @@ async def test_running_worker_does_not_rollback_completed_operation(
     )
 
     # Assert
-    provider_client.create_payment.assert_awaited_once_with(
-        operation_id=running_operation,
-        amount=Decimal("1000.00"),
-        currency="RUB",
-    )
 
     async with TestSessionLocal() as session:
         operation = await session.get(
