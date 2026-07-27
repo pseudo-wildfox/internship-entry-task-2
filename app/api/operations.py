@@ -11,6 +11,7 @@ from app.schemas.operation import (
 from app.services.operation_service import (
     OperationService, SubmitOutcome,
 )
+from core.dependencies import get_operation_service
 from core.exceptions import OperationAlreadyExistsError, OperationNotFoundError
 
 operations_router = APIRouter(
@@ -18,8 +19,6 @@ operations_router = APIRouter(
     tags=["operations"],
 )
 
-# I don't mind global service because it's stateless
-operation_service = OperationService()
 
 
 @operations_router.post(
@@ -30,6 +29,7 @@ operation_service = OperationService()
 async def create_operation(
     request: CreateOperationRequest,
     session: AsyncSession = Depends(get_db),
+    operation_service: OperationService = Depends(get_operation_service),
 ) -> OperationResponse:
     try:
         operation = await operation_service.create(
@@ -54,6 +54,7 @@ async def create_operation(
 async def get_operation_events(
     operation_id: str,
     session: AsyncSession = Depends(get_db),
+    operation_service: OperationService = Depends(get_operation_service)
 ) -> list[EventResponse]:
     try:
         events = await operation_service.get_events(
@@ -80,6 +81,7 @@ async def get_operation_events(
 async def submit_operation(
     operation_id: str,
     session: AsyncSession = Depends(get_db),
+    operation_service: OperationService = Depends(get_operation_service)
 ) -> JSONResponse:
     try:
         result = await operation_service.submit(
@@ -118,6 +120,7 @@ async def submit_operation(
 async def get_operation(
     operation_id: str,
     session: AsyncSession = Depends(get_db),
+    operation_service: OperationService = Depends(get_operation_service)
 ) -> OperationResponse:
     try:
         operation = await operation_service.get_by_id(
