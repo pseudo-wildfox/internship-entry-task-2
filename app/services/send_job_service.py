@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.models.send_job import SendJob
 from app.db.models.enums import SendJobState
 from app.db.models import Operation
+from core.exceptions import OperationNotFoundError
 
 
 class SendJobService:
@@ -28,7 +29,7 @@ class SendJobService:
         or the job was already claimed.
         """
 
-        operation = await self._get_operation_for_update(
+        operation = await self.get_operation_for_update(
             session=session,
             operation_id=operation_id,
         )
@@ -47,13 +48,14 @@ class SendJobService:
         return True
 
 
-    async def _get_operation_for_update(
+    async def get_operation_for_update(
         self,
         session: AsyncSession,
         operation_id: str,
     ) -> Operation:
         """
-        Operation should be locked before accessing SendJob
+        Operation is the serialization point for all state changes
+        related to an operation.
         """
         result = await session.execute(
             select(Operation)
@@ -67,7 +69,9 @@ class SendJobService:
         operation = result.scalar_one_or_none()
 
         if operation is None:
-            raise ValueError(f"Operation not found: {operation_id}")
+            raise OperationNotFoundError(
+                f"Operation not found: {operation_id}",
+            )
 
         return operation
 
@@ -97,7 +101,7 @@ class SendJobService:
         provider_payment_id: str,
     ) -> None:
 
-        operation = await self._get_operation_for_update(
+        operation = await self.get_operation_for_update(
             session,
             operation_id,
         )
@@ -154,7 +158,7 @@ class SendJobService:
         operation_id: str,
         error: str,
     ) -> None:
-        operation = await self._get_operation_for_update(
+        operation = await self.get_operation_for_update(
             session,
             operation_id,
         )

@@ -9,11 +9,9 @@ from app.schemas.operation import (
     EventResponse,
 )
 from app.services.operation_service import (
-    OperationAlreadyExistsError,
-    OperationNotFoundError,
     OperationService, SubmitOutcome,
 )
-
+from core.exceptions import OperationAlreadyExistsError, OperationNotFoundError
 
 operations_router = APIRouter(
     prefix="/operations",

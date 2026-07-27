@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.models import Operation, Event, SendJob
 from app.db.models.enums import OperationStatus, SendJobState, EventType
 from app.schemas.operation import CreateOperationRequest
-
+from core.exceptions import OperationAlreadyExistsError, OperationNotFoundError
 
 
 class SubmitOutcome(StrEnum):
@@ -21,27 +21,6 @@ class SubmitOutcome(StrEnum):
 class SubmitResult:
     operation: Operation
     outcome: SubmitOutcome
-
-
-class OperationAlreadyExistsError(Exception):
-    """Raised when an operation with the given ID already exists."""
-
-    def __init__(self, operation_id: str) -> None:
-        self.operation_id = operation_id
-
-        super().__init__(
-            f"Operation '{operation_id}' already exists"
-        )
-
-class OperationNotFoundError(Exception):
-    """Raised when an operation with the given ID does not exist."""
-
-    def __init__(self, operation_id: str) -> None:
-        self.operation_id = operation_id
-
-        super().__init__(
-            f"Operation '{operation_id}' not found"
-        )
 
 
 class OperationService:
