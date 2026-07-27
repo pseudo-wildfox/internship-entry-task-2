@@ -18,3 +18,7 @@ class OperationNotFoundError(Exception):
         super().__init__(
             f"Operation '{operation_id}' not found"
         )
+
+
+class ProviderPaymentConflictError(Exception):
+    pass

@@ -4,8 +4,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.database import get_db
 from app.schemas.receipt import ReceiptRequest
 from app.services.receipt_service import ReceiptService
-from app.dependencies import get_receipt_service
-
+from app.core.dependencies import get_receipt_service
+from app.core.exceptions import ProviderPaymentConflictError, OperationNotFoundError
 
 receipts_router = APIRouter()
 
@@ -29,7 +29,15 @@ async def receive_receipt(
 
         await session.commit()
 
-    except ValueError as exc:
+    except OperationNotFoundError as exc:
+        await session.rollback()
+
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+
+    except ProviderPaymentConflictError as exc:
         await session.rollback()
 
         raise HTTPException(

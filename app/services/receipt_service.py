@@ -7,6 +7,7 @@ from app.db.models.enums import OperationStatus, SendJobState
 from app.services.event_service import EventService
 from app.db.models.enums import EventType
 from app.db.models import Operation
+from app.core.exceptions import ProviderPaymentConflictError
 
 
 class ReceiptService:
@@ -18,6 +19,7 @@ class ReceiptService:
         self._send_job_service = send_job_service
         self._event_service = event_service
 
+
     async def process_receipt(
         self,
         session: AsyncSession,
@@ -28,31 +30,23 @@ class ReceiptService:
             operation_id=receipt.operation_id,
         )
 
-        # 1. ProviderPaymentId conflict
-        if (
-            operation.provider_payment_id is not None
-            and operation.provider_payment_id
-            != receipt.provider_payment_id
-        ):
-            raise ValueError(
-                "Provider payment ID conflict: "
-                f"operation={receipt.operation_id}, "
-                f"existing={operation.provider_payment_id}, "
-                f"received={receipt.provider_payment_id}",
-            )
+        self._validate_provider_payment_id(
+            operation=operation,
+            receipt=receipt,
+        )
 
-        # 2. First valid receipt.
-        #
-        # The receipt establishes the relation:
-        #
-        # Operation <-> Provider Payment
-        #
+        # The first valid receipt establishes the relationship
+        # between our operation and the provider payment.
         if operation.provider_payment_id is None:
             operation.provider_payment_id = (
                 receipt.provider_payment_id
             )
 
-        # 3. Receipt for an already finalized operation.
+        # Operation is already finalized.
+        #
+        # Same result  -> duplicate receipt, ignore silently.
+        # Different result -> late conflicting receipt,
+        #                     record as ignored.
         if operation.status != OperationStatus.PROCESSING:
             await self._handle_late_receipt(
                 session=session,
@@ -61,7 +55,7 @@ class ReceiptService:
             )
             return
 
-        # 4. First final receipt.
+        # First valid final receipt.
         await self._complete_operation(
             session=session,
             operation=operation,
@@ -69,33 +63,79 @@ class ReceiptService:
         )
 
 
-    async def _handle_late_receipt(
+    @staticmethod
+    def _validate_provider_payment_id(
+        operation: Operation,
+        receipt: ReceiptRequest,
+    ) -> None:
+        if (
+            operation.provider_payment_id is not None
+            and operation.provider_payment_id
+            != receipt.provider_payment_id
+        ):
+            raise ProviderPaymentConflictError(
+                "Provider payment ID conflict: "
+                f"operation={receipt.operation_id}, "
+                f"existing={operation.provider_payment_id}, "
+                f"received={receipt.provider_payment_id}",
+            )
+
+
+    async def _complete_operation(
             self,
             session: AsyncSession,
             operation: Operation,
             receipt: ReceiptRequest,
     ) -> None:
+        old_status = operation.status
+        new_status = OperationStatus(receipt.result)
+
+        operation.status = new_status
+
+        if operation.send_job is not None:
+            operation.send_job.state = SendJobState.DONE
+
+        event_type = self._handle_status(
+            receipt.result,
+        )
+
+        await self._event_service.create_event(
+            session=session,
+            operation=operation,
+            event_type=event_type,
+            from_status=old_status,
+            to_status=new_status,
+            message=receipt.message,
+        )
+
+
+    async def _handle_late_receipt(
+        self,
+        session: AsyncSession,
+        operation: Operation,
+        receipt: ReceiptRequest,
+    ) -> None:
         current_status = operation.status
         receipt_status = OperationStatus(receipt.result)
 
-        # Same final result:
+        # Duplicate receipt.
         #
-        # COMPLETED + COMPLETED
-        # REJECTED  + REJECTED
+        # Example:
+        #   Operation = COMPLETED
+        #   Receipt   = COMPLETED
         #
-        # This is a duplicate receipt.
-        # Nothing should be changed.
+        # No new event is created.
         if current_status == receipt_status:
             return
 
-        # Different final result:
+        # Conflicting late receipt.
         #
-        # COMPLETED + REJECTED
-        # REJECTED + COMPLETED
+        # Example:
+        #   Operation = COMPLETED
+        #   Receipt   = REJECTED
         #
-        # The operation is already finalized.
-        # The late conflicting receipt is ignored,
-        # but the fact that it happened is recorded.
+        # The final status must not change.
+        # We only record the ignored receipt.
         await self._event_service.create_event(
             session=session,
             operation=operation,
@@ -109,36 +149,10 @@ class ReceiptService:
             ),
         )
 
-    async def _complete_operation(
-            self,
-            session: AsyncSession,
-            operation: Operation,
-            receipt: ReceiptRequest,
-    ) -> None:
-        old_status = operation.status
 
-        new_status = OperationStatus(receipt.result)
-
-        operation.status = new_status
-
-        if operation.send_job is not None:
-            operation.send_job.state = SendJobState.DONE
-
-        event_type = self._handle_status(receipt.result)
-
-        await self._event_service.create_event(
-            session=session,
-            operation=operation,
-            event_type=event_type,
-            from_status=old_status,
-            to_status=new_status,
-            message=receipt.message,
-        )
-
-
+    @staticmethod
     def _handle_status(
-            self,
-            status: Literal["COMPLETED", "REJECTED"],
+        status: Literal["COMPLETED", "REJECTED"],
     ) -> EventType:
         match status:
             case "COMPLETED":
