@@ -5,15 +5,16 @@ from contextlib import asynccontextmanager
 import httpx
 from fastapi import FastAPI
 
-from api.provider.provider_client import ProviderClient
-from core.settings import settings
-from workers.pending_worker import PendingWorker
+from app.api.provider.provider_client import ProviderClient
+from app.api.receipts import receipts_router
+from app.core.settings import settings
+from app.workers.pending_worker import PendingWorker
 from app.api.health import health
-from app.api.operations import router
+from app.api.operations import operations_router
 from app.db.database import check_connection, SessionLocal
 from app.core.logging_config import setup_logging
 from app.services.send_job_service import SendJobService
-from workers.running_worker import RunningWorker
+from app.workers.running_worker import RunningWorker
 
 setup_logging()
 
@@ -67,5 +68,6 @@ app = FastAPI(
 )
 
 app.include_router(router=health)
-app.include_router(router=router)
+app.include_router(router=operations_router)
+app.include_router(router=receipts_router)
 

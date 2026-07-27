@@ -15,7 +15,7 @@ from app.services.operation_service import (
 )
 
 
-router = APIRouter(
+operations_router = APIRouter(
     prefix="/operations",
     tags=["operations"],
 )
@@ -24,7 +24,7 @@ router = APIRouter(
 operation_service = OperationService()
 
 
-@router.post(
+@operations_router.post(
     "",
     response_model=OperationResponse,
     status_code=status.HTTP_201_CREATED,
@@ -48,7 +48,7 @@ async def create_operation(
     return OperationResponse.model_validate(operation)
 
 
-@router.get(
+@operations_router.get(
     "/{operation_id}/events",
     response_model=list[EventResponse],
     status_code=status.HTTP_200_OK,
@@ -75,7 +75,7 @@ async def get_operation_events(
     ]
 
 
-@router.post(
+@operations_router.post(
     "/{operation_id}/submit",
     response_model=OperationResponse,
 )
@@ -112,7 +112,7 @@ async def submit_operation(
     )
 
 
-@router.get(
+@operations_router.get(
     "/{operation_id}",
     response_model=OperationResponse,
     status_code=status.HTTP_200_OK,
