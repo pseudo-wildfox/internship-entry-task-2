@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from typing import Self
 
 from sqlalchemy import update, select
 from sqlalchemy.orm import selectinload
@@ -203,3 +204,9 @@ class SendJobService:
 
         send_job.attempt = next_attempt
         send_job.last_error = error
+        send_job.next_retry_at = (
+            self._retry_policy.next_retry_at(
+                attempt=next_attempt,
+                now=now,
+            )
+        )
