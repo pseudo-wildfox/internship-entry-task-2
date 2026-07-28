@@ -242,16 +242,9 @@ class SendJobService:
         session: AsyncSession,
     ) -> list[str]:
         """
-        Finds SendJobs that are ready to be retried.
+        Finds SendJobs whose retry time has been reached.
 
-        WAITING_RETRY with NULL next_retry_at means that the job
-        has just entered the retry state and has not been scheduled
-        by the retry policy yet.
-
-        Such jobs are immediately eligible for processing.
-
-        Jobs with next_retry_at set are eligible only when the
-        scheduled retry time has been reached.
+        WAITING_RETRY jobs always have a non-null next_retry_at.
         """
 
         now = datetime.now(timezone.utc)
@@ -260,13 +253,10 @@ class SendJobService:
             select(SendJob.operation_id)
             .where(
                 SendJob.state == SendJobState.WAITING_RETRY,
-                (
-                    SendJob.next_retry_at.is_(None)
-                    | (SendJob.next_retry_at <= now)
-                ),
+                SendJob.next_retry_at <= now,
             )
             .order_by(
-                SendJob.next_retry_at.asc().nulls_first(),
+                SendJob.next_retry_at.asc(),
                 SendJob.created_at.asc(),
             ),
         )
