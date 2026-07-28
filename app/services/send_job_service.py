@@ -181,6 +181,25 @@ class SendJobService:
         if send_job.state != SendJobState.RUNNING:
             return
 
+        now = datetime.now(timezone.utc)
         send_job.state = SendJobState.WAITING_RETRY
-        send_job.attempt += 1
+
+        await self._schedule_retry(
+            send_job,
+            error=error,
+            now=now,
+        )
+        send_job.updated_at = now
+
+
+    async def _schedule_retry(
+            self,
+            send_job: SendJob,
+            *,
+            error: str,
+            now: datetime,
+    ) -> None:
+        next_attempt = send_job.attempt + 1
+
+        send_job.attempt = next_attempt
         send_job.last_error = error
