@@ -16,6 +16,7 @@ from app.main import app
 from app.core.settings import settings
 from app.services.send_job_service import SendJobService
 from app.workers.running_worker import RunningWorker
+from app.workers.retry_worker import RetryWorker
 
 # ============================================================
 # Test database
@@ -193,3 +194,17 @@ async def running_operation(
         await session.commit()
 
     return operation_id
+
+
+@pytest_asyncio.fixture
+async def retry_worker(
+    provider_client,
+    send_job_service,
+):
+    return RetryWorker(
+        session_factory=TestSessionLocal,
+        send_job_service=send_job_service,
+        provider_client=provider_client,
+        poll_interval=0.01,
+    )
+
