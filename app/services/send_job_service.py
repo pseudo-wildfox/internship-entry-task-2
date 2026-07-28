@@ -210,3 +210,85 @@ class SendJobService:
                 now=now,
             )
         )
+
+
+    async def find_retryable_operation_ids(
+        self,
+        session: AsyncSession,
+    ) -> list[str]:
+        """
+        Finds SendJobs that are ready to be retried.
+
+        WAITING_RETRY with NULL next_retry_at means that the job
+        has just entered the retry state and has not been scheduled
+        by the retry policy yet.
+
+        Such jobs are immediately eligible for processing.
+
+        Jobs with next_retry_at set are eligible only when the
+        scheduled retry time has been reached.
+        """
+
+        now = datetime.now(timezone.utc)
+
+        result = await session.scalars(
+            select(SendJob.operation_id)
+            .where(
+                SendJob.state == SendJobState.WAITING_RETRY,
+                (
+                    SendJob.next_retry_at.is_(None)
+                    | (SendJob.next_retry_at <= now)
+                ),
+            )
+            .order_by(
+                SendJob.next_retry_at.asc().nulls_first(),
+                SendJob.created_at.asc(),
+            ),
+        )
+
+        return list(result.all())
+
+
+    async def record_retry_failure(
+        self,
+        session: AsyncSession,
+        operation_id: str,
+        error: str,
+    ) -> None:
+        """
+        Records a failed retry attempt.
+
+        The SendJob is already in WAITING_RETRY, so this method
+        does not perform a state transition.
+
+        WAITING_RETRY -> WAITING_RETRY
+
+        Only retry metadata is updated.
+
+        The actual retry scheduling policy will be added later.
+        """
+
+        operation = await self.get_operation_for_update(
+            session,
+            operation_id,
+        )
+
+        send_job = operation.send_job
+
+        if send_job is None:
+            raise ValueError(
+                f"SendJob not found: {operation_id}"
+            )
+
+        if send_job.state != SendJobState.WAITING_RETRY:
+            return
+
+        now = datetime.now(timezone.utc)
+
+        await self._schedule_retry(
+            send_job,
+            error=error,
+            now=now,
+        )
+
+        send_job.updated_at = now
