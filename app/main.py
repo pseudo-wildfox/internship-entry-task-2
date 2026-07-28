@@ -15,6 +15,7 @@ from app.db.database import check_connection, SessionLocal
 from app.core.logging_config import setup_logging
 from app.services.send_job_service import SendJobService
 from app.workers.running_worker import RunningWorker
+from app.workers.retry_worker import RetryWorker
 
 setup_logging()
 
@@ -45,6 +46,11 @@ async def lifespan(app: FastAPI):
             send_job_service=SendJobService.create_default(),
             provider_client=provider_client,
         )
+        retry_worker = RetryWorker(
+            session_factory=SessionLocal,
+            send_job_service=SendJobService.create_default(),
+            provider_client=provider_client,
+        )
 
         pending_task = asyncio.create_task(
             pending_worker.run(),
@@ -53,6 +59,10 @@ async def lifespan(app: FastAPI):
         running_task = asyncio.create_task(
             running_worker.run(),
             name="running-worker",
+        )
+        retry_task = asyncio.create_task(
+            retry_worker.run(),
+            name="try-worker"
         )
         try:
             yield
@@ -63,6 +73,10 @@ async def lifespan(app: FastAPI):
 
             running_worker.stop()
             await running_task
+
+            retry_worker.stop()
+            await retry_task
+
 
 app = FastAPI(
     lifespan=lifespan,
