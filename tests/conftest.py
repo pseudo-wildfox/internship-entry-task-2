@@ -131,7 +131,7 @@ async def operation_id(client) -> str:
 
 @pytest_asyncio.fixture
 async def send_job_service():
-    return SendJobService()
+    return SendJobService.create_default()
 
 
 @pytest_asyncio.fixture

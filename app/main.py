@@ -28,7 +28,7 @@ async def lifespan(app: FastAPI):
 
     pending_worker = PendingWorker(
         session_factory=SessionLocal,
-        send_job_service=SendJobService(),
+        send_job_service=SendJobService.create_default(),
     )
 
     async with httpx.AsyncClient(
@@ -39,9 +39,10 @@ async def lifespan(app: FastAPI):
         provider_client = ProviderClient(
             client=http_client, provider_url=settings.PROVIDER_URL
         )
+
         running_worker = RunningWorker(
             session_factory=SessionLocal,
-            send_job_service=SendJobService(),
+            send_job_service=SendJobService.create_default(),
             provider_client=provider_client,
         )
 

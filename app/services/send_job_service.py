@@ -8,9 +8,19 @@ from app.db.models.send_job import SendJob
 from app.db.models.enums import SendJobState
 from app.db.models import Operation
 from core.exceptions import OperationNotFoundError
+from services.retry_policy import RetryPolicy
 
 
 class SendJobService:
+    def __init__(self, retry_policy: RetryPolicy):
+        self._retry_policy = retry_policy
+
+    @classmethod
+    def create_default(cls) -> Self:
+        return cls(
+            retry_policy=RetryPolicy()
+        )
+
     async def claim_send_job(
         self,
         session: AsyncSession,
