@@ -1,6 +1,7 @@
 import uuid
 from unittest.mock import AsyncMock
 
+import httpx
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
@@ -11,6 +12,7 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
+from app.api.provider.provider_client import ProviderClient
 from app.db.database import get_db
 from app.main import app
 from app.core.settings import settings
@@ -208,3 +210,50 @@ async def retry_worker(
         poll_interval=0.01,
     )
 
+
+@pytest_asyncio.fixture
+async def provider_requests():
+    return []
+
+
+@pytest_asyncio.fixture
+async def real_provider_client(
+    provider_requests,
+):
+    async def handler(
+        request: httpx.Request,
+    ) -> httpx.Response:
+        provider_requests.append(request)
+
+        if len(provider_requests) == 1:
+            # First attempt: simulate a network failure.
+            raise httpx.ConnectError(
+                "Connection reset",
+                request=request,
+            )
+
+        # Retry: provider accepts the request.
+        return httpx.Response(
+            status_code=202,
+            json={
+                "providerPaymentId": "provider-payment-retry",
+                "status": "ACCEPTED",
+            },
+            request=request,
+        )
+
+    transport = httpx.MockTransport(handler)
+
+    client = httpx.AsyncClient(
+        transport=transport,
+        base_url="http://provider",
+    )
+
+    provider_client = ProviderClient(
+        client=client,
+        provider_url="http://provider",
+    )
+
+    yield provider_client
+
+    await client.aclose()
