@@ -3,15 +3,45 @@ from datetime import datetime, timedelta, timezone
 
 
 class RetryPolicy:
+    """
+    Calculates the next retry time using exponential backoff
+    with full jitter.
+
+    Retry delays follow this pattern:
+
+        attempt 1 -> random(0, base_delay)
+        attempt 2 -> random(0, base_delay * 2)
+        attempt 3 -> random(0, base_delay * 4)
+        ...
+
+    The delay is capped at max_delay.
+
+    Full jitter prevents multiple retrying workers from
+    synchronizing their requests after the same failure.
+    """
+
     def __init__(
         self,
         base_delay: float = 1.0,
         max_delay: float = 60.0,
-        jitter: float = 0.2,
     ) -> None:
+        if base_delay <= 0:
+            raise ValueError(
+                "Base delay must be greater than zero"
+            )
+
+        if max_delay <= 0:
+            raise ValueError(
+                "Max delay must be greater than zero"
+            )
+
+        if base_delay > max_delay:
+            raise ValueError(
+                "Base delay cannot be greater than max delay"
+            )
+
         self._base_delay = base_delay
         self._max_delay = max_delay
-        self._jitter = jitter
 
     def next_retry_at(
         self,
@@ -32,14 +62,9 @@ class RetryPolicy:
             self._max_delay,
         )
 
-        jitter = random.uniform(
+        delay = random.uniform(
             0,
-            exponential_delay * self._jitter,
-        )
-
-        delay = min(
-            exponential_delay + jitter,
-            self._max_delay,
+            exponential_delay,
         )
 
         return now + timedelta(seconds=delay)
