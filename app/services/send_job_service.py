@@ -111,6 +111,17 @@ class SendJobService:
         operation_id: str,
         provider_payment_id: str,
     ) -> None:
+        """
+        Completes the delivery job after the provider accepted the request.
+
+        RUNNING -> DONE
+        WAITING_RETRY -> DONE
+
+        Operation.status is intentionally not changed here.
+        The final payment status is determined exclusively by receipt callbacks.
+
+        The operation row is locked before any mutation.
+        """
 
         operation = await self.get_operation_for_update(
             session,
@@ -120,16 +131,18 @@ class SendJobService:
         send_job = operation.send_job
 
         if send_job is None:
-            raise ValueError(f"SendJob not found: {operation_id}")
+            raise ValueError(
+                f"SendJob not found: {operation_id}"
+            )
 
-        # The callback could have set the provider_payment_id before
-        # we received HTTP 202 from the provider.
+        # A callback may have established the provider payment ID
+        # before the HTTP response was received.
         #
-        # If the ID has already been set, it must match the one
-        # returned by the provider.
+        # If the ID is already known, the provider response must
+        # contain the same ID.
         if (
-            operation.provider_payment_id is not None
-            and operation.provider_payment_id != provider_payment_id
+                operation.provider_payment_id is not None
+                and operation.provider_payment_id != provider_payment_id
         ):
             raise ValueError(
                 "Provider payment ID conflict: "
@@ -138,29 +151,29 @@ class SendJobService:
                 f"received={provider_payment_id}"
             )
 
-        # The Job has already been processed.
-        #
-        # For example, the callback could have arrived before the HTTP response
-        # from the provider and already changed the SendJob state.
-        #
-        # In this case, the late response from the provider should not rollback
-        # or reprocess the operation.
-
-        if send_job.state != SendJobState.RUNNING:
+        # The delivery job may already have been completed by another
+        # code path. In that case, the late provider response must not
+        # change the operation state or create another transition.
+        if send_job.state == SendJobState.DONE:
             return
 
-        # If the callback has already set the provider_payment_id,
-        # there is no need to assign it again.
+        # If the callback has already moved the job out of RUNNING
+        # and the state is no longer eligible for completion, do nothing.
+        if send_job.state not in {
+            SendJobState.RUNNING,
+            SendJobState.WAITING_RETRY,
+        }:
+            return
+
         if operation.provider_payment_id is None:
             operation.provider_payment_id = provider_payment_id
 
-        # The provider accepted the payment request.
-        # This only completes the delivery job.
-        #
-        # Operation status MUST NOT be changed here.
-        # The final payment status is determined exclusively
-        # by the provider receipt callback.
+        now = datetime.now(timezone.utc)
+
         send_job.state = SendJobState.DONE
+        send_job.next_retry_at = None
+        send_job.last_error = None
+        send_job.updated_at = now
 
 
     async def move_to_retry(
