@@ -47,11 +47,3 @@ class ProviderClient:
             provider_payment_id=data["providerPaymentId"],
             status=data["status"],
         )
-
-
-class ProviderNetworkError:
-    pass
-
-
-class ProviderTemporaryError:
-    pass

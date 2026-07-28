@@ -7,7 +7,7 @@ from services.operation_service import OperationService
 
 
 def get_send_job_service() -> SendJobService:
-    return SendJobService()
+    return SendJobService.create_default()
 
 
 def get_event_service() -> EventService:
