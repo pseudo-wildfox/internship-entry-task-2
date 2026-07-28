@@ -34,7 +34,13 @@ async def lifespan(app: FastAPI):
     )
 
     async with httpx.AsyncClient(
-        timeout=httpx.Timeout(5.0),
+        timeout=httpx.Timeout(
+            timeout=None,
+            connect=2.0,
+            write=5.0,
+            read=30.0,
+            pool=5.0,
+        )
     ) as http_client:
         app.state.http_client = http_client
 
@@ -88,4 +94,3 @@ app = FastAPI(
 app.include_router(router=health)
 app.include_router(router=operations_router)
 app.include_router(router=receipts_router)
-
