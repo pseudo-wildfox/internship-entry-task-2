@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import (
 from app.api.provider.provider_client import ProviderClient
 from app.db.database import get_db
 from app.main import app
-from app.core.settings import settings
+from app.core.test_settings import test_settings
 from app.services.send_job_service import SendJobService
 from app.workers.running_worker import RunningWorker
 from app.workers.retry_worker import RetryWorker
@@ -28,7 +28,7 @@ from app.workers.retry_worker import RetryWorker
 
 
 test_engine = create_async_engine(
-    settings.TEST_DATABASE_URL,
+    test_settings.TEST_DATABASE_URL,
     echo=False,
     poolclass=NullPool,
 )

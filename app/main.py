@@ -22,33 +22,41 @@ setup_logging()
 logger = logging.getLogger(__name__)
 
 
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await check_connection()
 
+    send_job_service = SendJobService.create_default()
+
     pending_worker = PendingWorker(
         session_factory=SessionLocal,
-        send_job_service=SendJobService.create_default(),
+        send_job_service=send_job_service,
     )
 
     async with httpx.AsyncClient(
-        timeout=httpx.Timeout(5.0),
+        timeout=httpx.Timeout(
+            timeout=None,
+            connect=2.0,
+            write=5.0,
+            read=30.0,
+            pool=5.0,
+        )
     ) as http_client:
         app.state.http_client = http_client
 
         provider_client = ProviderClient(
-            client=http_client, provider_url=settings.PROVIDER_URL
+            client=http_client,
+            provider_url=settings.PROVIDER_URL,
         )
 
         running_worker = RunningWorker(
             session_factory=SessionLocal,
-            send_job_service=SendJobService.create_default(),
+            send_job_service=send_job_service,
             provider_client=provider_client,
         )
         retry_worker = RetryWorker(
             session_factory=SessionLocal,
-            send_job_service=SendJobService.create_default(),
+            send_job_service=send_job_service,
             provider_client=provider_client,
         )
 
@@ -62,20 +70,21 @@ async def lifespan(app: FastAPI):
         )
         retry_task = asyncio.create_task(
             retry_worker.run(),
-            name="try-worker"
+            name="retry-worker",
         )
         try:
             yield
+
         finally:
-
             pending_worker.stop()
-            await pending_task
-
             running_worker.stop()
-            await running_task
-
             retry_worker.stop()
-            await retry_task
+
+            await asyncio.gather(
+                pending_task,
+                running_task,
+                retry_task,
+            )
 
 
 app = FastAPI(
@@ -85,4 +94,3 @@ app = FastAPI(
 app.include_router(router=health)
 app.include_router(router=operations_router)
 app.include_router(router=receipts_router)
-

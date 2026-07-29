@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.db.models import SendJob
 from app.db.models.enums import SendJobState
-from services.send_job_service import SendJobService
+from app.services.send_job_service import SendJobService
 
 logger = logging.getLogger(__name__)
 

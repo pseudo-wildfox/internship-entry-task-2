@@ -4,7 +4,7 @@ import json
 
 from decimal import Decimal
 
-from app.api.provider.provider_client import ProviderClient
+from app.api.provider.provider_client import ProviderClient, ProviderHttpError
 from conftest import TestSessionLocal
 from app.db.models import SendJob, Operation
 from app.db.models.enums import SendJobState, OperationStatus
@@ -87,10 +87,8 @@ async def test_provider_client_sends_idempotency_and_correlation_headers():
     }
 
 
-
-
 @pytest.mark.asyncio
-async def test_provider_client_uses_same_idempotency_key_and_correlation_id_on_retries():
+async def test_provider_client_repeated_calls_use_same_idempotency_key_and_body():
     # Arrange
     operation_id = "operation-123"
 
@@ -102,7 +100,10 @@ async def test_provider_client_uses_same_idempotency_key_and_correlation_id_on_r
         requests.append(request)
 
         if len(requests) == 1:
-            # Simulate a temporary provider/network failure.
+            # The first attempt fails.
+            #
+            # ProviderClient does not retry internally.
+            # The caller is responsible for retrying.
             return httpx.Response(
                 status_code=503,
                 json={
@@ -130,13 +131,27 @@ async def test_provider_client_uses_same_idempotency_key_and_correlation_id_on_r
         )
 
         # Act
-        with pytest.raises(httpx.HTTPStatusError):
+        #
+        # First attempt fails with 503.
+        with pytest.raises(ProviderHttpError) as exc_info:
             await provider_client.create_payment(
                 operation_id=operation_id,
                 amount=Decimal("1000.00"),
                 currency="RUB",
             )
 
+        # ProviderClient must expose the HTTP failure
+        # to the caller. It does not perform the retry itself.
+        assert exc_info.value.status_code == 503
+
+        # The caller retries the same payment operation.
+        #
+        # The same operation_id must be used, therefore:
+        #
+        # Idempotency-Key = operation_id
+        # X-Correlation-ID = operation_id
+        #
+        # The request body must also remain unchanged.
         result = await provider_client.create_payment(
             operation_id=operation_id,
             amount=Decimal("1000.00"),
@@ -185,8 +200,12 @@ async def test_provider_client_uses_same_idempotency_key_and_correlation_id_on_r
         == second_request.headers["X-Correlation-ID"]
     )
 
-    # The request bodies must also remain identical.
-    assert json.loads(first_request.content) == json.loads(second_request.content)
+    # The request bodies must remain identical.
+    assert json.loads(
+        first_request.content,
+    ) == json.loads(
+        second_request.content,
+    )
 
 
 @pytest.mark.asyncio
