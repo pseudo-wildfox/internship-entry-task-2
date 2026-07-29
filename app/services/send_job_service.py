@@ -8,8 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.models.send_job import SendJob
 from app.db.models.enums import SendJobState
 from app.db.models import Operation
-from core.exceptions import OperationNotFoundError
-from services.retry_policy import RetryPolicy
+from app.core.exceptions import OperationNotFoundError
+from app.services.retry_policy import RetryPolicy
 
 
 class SendJobService:

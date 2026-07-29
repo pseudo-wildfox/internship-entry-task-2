@@ -3,7 +3,7 @@ from fastapi import Depends
 from app.services.event_service import EventService
 from app.services.receipt_service import ReceiptService
 from app.services.send_job_service import SendJobService
-from services.operation_service import OperationService
+from app.services.operation_service import OperationService
 
 
 def get_send_job_service() -> SendJobService:

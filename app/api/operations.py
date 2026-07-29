@@ -11,8 +11,8 @@ from app.schemas.operation import (
 from app.services.operation_service import (
     OperationService, SubmitOutcome,
 )
-from core.dependencies import get_operation_service
-from core.exceptions import OperationAlreadyExistsError, OperationNotFoundError
+from app.core.dependencies import get_operation_service
+from app.core.exceptions import OperationAlreadyExistsError, OperationNotFoundError
 
 operations_router = APIRouter(
     prefix="/operations",

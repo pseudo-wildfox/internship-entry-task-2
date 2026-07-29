@@ -9,8 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.models import Operation, Event, SendJob
 from app.db.models.enums import OperationStatus, SendJobState, EventType
 from app.schemas.operation import CreateOperationRequest
-from core.exceptions import OperationAlreadyExistsError, OperationNotFoundError
-from services.event_service import EventService
+from app.core.exceptions import OperationAlreadyExistsError, OperationNotFoundError
+from app.services.event_service import EventService
 
 
 class SubmitOutcome(StrEnum):
